@@ -218,11 +218,11 @@ def load_s0s1_samples_from_csv(path: Union[str, os.PathLike]) -> np.ndarray:
     return _infer_s0s1_matrix_from_df(df)
 
 # ======================================
-# D_ell loader (CSV from compute_dell_empiriques)
+# D_ell loader (CSV from compute_dell_empirical)
 # ======================================
 def _load_emp_ps_from_csv(csv_path: str, *, quiet: bool = False) -> Dict[str, Any]:
     """
-    Reads a CSV produced by compute_dell_empiriques(...) and prepares a dict:
+    Reads a CSV produced by compute_dell_empirical(...) and prepares a dict:
       - 'ell'
       - 'D_ell_mean' (optional)
       - 'D_ell_std'  (optional)
@@ -255,7 +255,7 @@ def _load_emp_ps_from_csv(csv_path: str, *, quiet: bool = False) -> Dict[str, An
 
 def _load_dell_block(paths: Sequence[str], *, cut_head: int = 1, cut_tail: int = 1) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
-    Builds a D_ell block [N, p_D] by reading one or more 'compute_dell_empiriques' CSV outputs.
+    Builds a D_ell block [N, p_D] by reading one or more 'compute_dell_empirical' CSV outputs.
     Cuts 'cut_head' and 'cut_tail' bins (default 1/1).
     Returns (X, meta).
     """
@@ -323,7 +323,7 @@ def compute_covariance_mixed(
     """
     Builds a feature matrix X from WST and/or D_ell, then computes the empirical covariance (ddof=1).
     - WST: accepts 'wide' or 'long' CSVs (S1 only, or S0+S1 if prefer_s0s1=True).
-    - D_ell: accepts 'compute_dell_empiriques' CSVs; cuts head/tail bins.
+    - D_ell: accepts 'compute_dell_empirical' CSVs; cuts head/tail bins.
     - Mix: concatenates WST and D_ell by columns (cross-covariances included).
     - No inversion or Hartlap correction here.
     Saves in CSV, NPY, NPZ, PKL format depending on options. Plots heatmap if plot=True.
@@ -480,10 +480,9 @@ if __name__ == "__main__":
     p.add_argument("--wst", dest="wst", nargs="*", default=None,
                    help="WST paths (CSV, directory, or glob). S0+S1 if available, else S1.")
     p.add_argument("--dell", dest="dell", nargs="*", default=None,
-                   help="D_ell paths (compute_dell_empiriques CSV, directory, or glob).")
+                   help="D_ell paths (compute_dell_empirical CSV, directory, or glob).")
     p.add_argument("--no_s0", action="store_true",
                    help="Do not attempt S0+S1 (forces S1 only).")
-    p.add_E('`ArgumentParser` object has no attribute `E`', '`add_argument`')
     p.add_argument("--align", type=str, default="truncate", choices=["truncate", "strict"],
                    help="Align blocks by N: truncate to common N or require equality.")
     p.add_argument("--dell_cut_head", type=int, default=1, help="Nb of bins to cut at the beginning (D_ell).")

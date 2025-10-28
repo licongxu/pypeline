@@ -34,7 +34,7 @@ from .cov_en import (
 
 # Empirical power spectrum computation
 from .emp_ps_en import (
-    compute_dell_empiriques
+    compute_dell_empirical
 )
 
 # Data generation from CSV files
@@ -87,7 +87,7 @@ __all__ = [
     'compute_covariance_mixed',
     
     # Empirical power spectrum
-    'compute_dell_empiriques',
+    'compute_dell_empirical',
     
     # Data generation
     'generate_patch_from_csv',

@@ -75,7 +75,7 @@ def _cl_from_map(imap, bsize=300, apod_width=100, max_ell=10_000, normalize='phy
     return ell_b_cut, Cl_b_cut, float(fsky_full), float(fsky_eff)
 
 
-def compute_dell_empiriques(
+def compute_dell_empirical(
     path_like,
     bsize=300,
     max_ell=10_000,
@@ -171,7 +171,7 @@ def compute_dell_empiriques(
                     cosmo = os.path.basename(sd.rstrip(os.sep))
                     if not quiet:
                         print(f"\n=== Cosmology: {cosmo} ===")
-                    res = compute_dell_empiriques(
+                    res = compute_dell_empirical(
                         path_like=sd,
                         bsize=bsize,
                         max_ell=max_ell,

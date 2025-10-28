@@ -4,6 +4,8 @@ import pandas as pd
 import math
 import logging
 from typing import Optional, Tuple, Dict, Any, Literal
+import sys
+sys.path.append('/Users/licongxu/Work/scattering_transform')
 import scattering  # already imported in your code
 setattr(scattering, "np", np)  # hotfix: provide 'np' to the module
 
