@@ -16,10 +16,10 @@ def _fits_list(path_like):
         return files
     elif os.path.isfile(path_like):
         if not (path_like.endswith(".fits") or path_like.endswith(".fits.gz")):
-            raise ValueError(f"files non-FITS given: {path_like}")
+            raise ValueError(f"non-FITS file given: {path_like}")
         return [path_like]
     else:
-        raise FileNotFoundError(f"file not found at this path : {path_like}")
+        raise FileNotFoundError(f"file not found at this path: {path_like}")
 
 
 def _area_weighted_mean_w2(taper_mask, pix_area, area_weighted=True):
@@ -218,7 +218,7 @@ def compute_dell_empiriques(
                             if not quiet:
                                 print(f"Summary mean/std written: {meanstd_csv}")
                         except Exception as e:
-                            print(f"[WARN] Impossible to write the csv summary for {cosmo}: {e}")
+                            print(f"[WARN] Cannot write CSV summary for {cosmo}: {e}")
 
                 total_elapsed = time.perf_counter() - t0_group
                 if not quiet:
@@ -340,7 +340,7 @@ def compute_dell_empiriques(
 
         if overlay_theory is not None:
             ell_th, D_th = overlay_theory
-            plt.plot(ell_th, D_th, linestyle='dashed', label='Théorie')
+            plt.plot(ell_th, D_th, linestyle='dashed', label='Theory')
 
         plt.xscale('log')
         plt.yscale('log')

@@ -47,10 +47,10 @@ def _infer_s1_matrix_from_df(df):
         df['kind'] = df['kind'].astype(str).str.upper()
         df_s1 = df[df['kind'].isin(['S1', 'S1_ISO'])].copy()
         if df_s1.empty:
-            raise ValueError("Format long détecté, mais aucune ligne 'S1'/'S1_ISO' trouvée.")
+            raise ValueError("Long format detected, but no 'S1'/'S1_ISO' rows found.")
         value_col = 'value' if 'value' in df_s1.columns else ('mean' if 'mean' in df_s1.columns else None)
         if value_col is None:
-            raise ValueError("Format long: aucune colonne 'value' ni 'mean' pour les S1.")
+            raise ValueError("Long format: no 'value' or 'mean' column found for S1.")
         sample_col = 'sample' if 'sample' in df_s1.columns else None
         if sample_col is None:
             # No sample column -> assume a single S1 mean -> N=1
@@ -58,7 +58,7 @@ def _infer_s1_matrix_from_df(df):
             return pivot.to_numpy(dtype=np.float32)[None, ...]  # [1,p]
         pivot = df_s1.pivot_table(index=sample_col, columns='index', values=value_col, aggfunc='first').sort_index()
         if pivot.isna().any().any():
-            raise ValueError("S1: valeurs manquantes après pivot (échantillons incomplets).")
+            raise ValueError("S1: missing values after pivot (incomplete samples).")
         return pivot.to_numpy(dtype=np.float32)
 
     # --- WIDE format ---
@@ -66,7 +66,7 @@ def _infer_s1_matrix_from_df(df):
     if 'sample' in num_df.columns:
         num_df = num_df.drop(columns=['sample'])
     if num_df.shape[1] == 0:
-        raise ValueError("Aucune colonne numérique détectée pour inférer S1.")
+        raise ValueError("No numeric column detected to infer S1.")
     return num_df.to_numpy(dtype=np.float32)
 
 def load_s1_samples_from_path(path: Union[str, os.PathLike]) -> np.ndarray:
@@ -90,18 +90,18 @@ def load_s1_samples_from_path(path: Union[str, os.PathLike]) -> np.ndarray:
     if any(ch in path for ch in ['*', '?', '[']):
         files = sorted(glob.glob(path))
         if not files:
-            raise FileNotFoundError(f"Aucun CSV ne matche le motif : {path}")
+            raise FileNotFoundError(f"No CSV matches the pattern: {path}")
         mats = [_read_one_csv(f) for f in files]
         _p = {m.shape[1] for m in mats}
         if len(_p) != 1:
-            raise ValueError(f"CSV S1 avec dimensions p incohérentes : {sorted(_p)}")
+            raise ValueError(f"S1 CSVs with inconsistent p dimensions: {sorted(_p)}")
         return np.concatenate(mats, axis=0)
 
     if os.path.isdir(path):
         # Heuristic: read all and filter those that pass S1
         files = sorted(glob.glob(os.path.join(path, "*.csv")))
         if not files:
-            raise FileNotFoundError(f"Aucun CSV dans le dossier : {path}")
+            raise FileNotFoundError(f"No CSV in directory: {path}")
         mats = []
         for f in files:
             try:
@@ -109,13 +109,13 @@ def load_s1_samples_from_path(path: Union[str, os.PathLike]) -> np.ndarray:
             except Exception:
                 continue
         if not mats:
-            raise ValueError("Aucun CSV compatible S1 n'a pu être lu dans le dossier.")
+            raise ValueError("No S1-compatible CSV could be read from directory.")
         _p = {m.shape[1] for m in mats}
         if len(_p) != 1:
-            raise ValueError(f"CSV S1 avec dimensions p incohérentes : {sorted(_p)}")
+            raise ValueError(f"S1 CSVs with inconsistent p dimensions: {sorted(_p)}")
         return np.concatenate(mats, axis=0)
 
-    raise FileNotFoundError(f"Chemin introuvable : {path}")
+    raise FileNotFoundError(f"Path not found: {path}")
 
 def _infer_s0s1_matrix_from_df(df):
     """
@@ -130,13 +130,13 @@ def _infer_s0s1_matrix_from_df(df):
         df['kind'] = df['kind'].astype(str).str.upper()
         value_col = 'value' if 'value' in df.columns else ('mean' if 'mean' in df.columns else None)
         if value_col is None:
-            raise ValueError("Format long détecté, mais aucune colonne 'value' ni 'mean'.")
+            raise ValueError("Long format detected, but no 'value' or 'mean' column found.")
 
         if 'sample' not in df.columns:
             # infer sample via S0 occurrences
             s0_rows = df[df['kind'] == 'S0']
             if s0_rows.empty:
-                raise ValueError("Impossible d'inférer 'sample' (aucun S0 en format long).")
+                raise ValueError("Cannot infer 'sample' (no S0 found in long format).")
             s0_idx = s0_rows.index
             sample_map = {}
             cur = 0
@@ -148,7 +148,7 @@ def _infer_s0s1_matrix_from_df(df):
                 if i in sample_map:
                     current_sample = sample_map[i]
                 if current_sample is None:
-                    raise ValueError("S1 rencontré avant tout S0: 'sample' non inféré.")
+                    raise ValueError("S1 encountered before any S0: 'sample' could not be inferred.")
                 sample_col.append(current_sample)
             df['sample'] = sample_col
 
@@ -156,7 +156,7 @@ def _infer_s0s1_matrix_from_df(df):
         df_s0 = df[df['kind'] == 'S0'].copy()
         s0_pivot = df_s0.pivot_table(index='sample', columns='index', values=value_col, aggfunc='first').sort_index()
         if s0_pivot.shape[1] < 1 or 0 not in s0_pivot.columns:
-            raise ValueError("S0 absent/mal formé (index 0 manquant).")
+            raise ValueError("S0 missing or malformed (index 0 missing).")
         S0 = s0_pivot[0].to_numpy(dtype=np.float32)[:, None]  # [N,1]
 
         # S1 (priority 'S1' else 'S1_ISO')
@@ -165,16 +165,16 @@ def _infer_s0s1_matrix_from_df(df):
         else:
             df_s1 = df[df['kind'] == 'S1_ISO'].copy()
         if df_s1.empty:
-            raise ValueError("Aucun S1/S1_ISO trouvé dans le CSV (format long).")
+            raise ValueError("No S1/S1_ISO found in CSV (long format).")
 
         s1_pivot = df_s1.pivot_table(index='sample', columns='index', values=value_col, aggfunc='first').sort_index()
         if s1_pivot.isna().any().any():
-            raise ValueError("Des valeurs S1 manquent pour certains échantillons (format long).")
+            raise ValueError("Some S1 values are missing for certain samples (long format).")
         s1_pivot = s1_pivot.reindex(sorted(s1_pivot.columns), axis=1)
         S1 = s1_pivot.to_numpy(dtype=np.float32)
 
         if S1.shape[0] != S0.shape[0]:
-            raise ValueError(f"Incohérence N entre S0 (N={S0.shape[0]}) et S1 (N={S1.shape[0]}).")
+            raise ValueError(f"Inconsistent N between S0 (N={S0.shape[0]}) and S1 (N={S1.shape[0]}).")
         return np.concatenate([S0, S1], axis=1)
 
     # --- WIDE format ---
@@ -182,14 +182,14 @@ def _infer_s0s1_matrix_from_df(df):
     if 'sample' in num_df.columns:
         num_df = num_df.drop(columns=['sample'])
     if num_df.shape[1] == 0:
-        raise ValueError("Aucune colonne numérique détectée (S0+S1).")
+        raise ValueError("No numeric column detected (S0+S1).")
 
     cols = [str(c).lower() for c in num_df.columns]
     s0_idx = [i for i, c in enumerate(cols) if c.startswith('s0_')]
     if not s0_idx:
         s0_idx = [0]  # fallback: 1st column = S0
     if len(s0_idx) != 1:
-        raise ValueError(f"Format wide ambigu: attendu exactement 1 colonne S0, trouvé {len(s0_idx)}.")
+        raise ValueError(f"Ambiguous wide format: expected exactly 1 S0 column, found {len(s0_idx)}.")
 
     s1_idx = [i for i, c in enumerate(cols) if c.startswith('s1_')]
     if not s1_idx:
@@ -213,7 +213,7 @@ def load_s0s1_samples_from_csv(path: Union[str, os.PathLike]) -> np.ndarray:
     import pandas as pd
     path = os.fspath(path)
     if not os.path.isfile(path):
-        raise FileNotFoundError(f"Fichier introuvable : {path}")
+        raise FileNotFoundError(f"File not found: {path}")
     df = pd.read_csv(path, comment='#')
     return _infer_s0s1_matrix_from_df(df)
 
@@ -231,10 +231,10 @@ def _load_emp_ps_from_csv(csv_path: str, *, quiet: bool = False) -> Dict[str, An
     import pandas as pd
     df = pd.read_csv(csv_path, comment="#")
     if "ell" not in df.columns:
-        raise ValueError("CSV invalide: colonne 'ell' absente.")
+        raise ValueError("Invalid CSV: 'ell' column missing.")
     patch_cols = [c for c in df.columns if c.startswith("D_ell_patch")]
     if len(patch_cols) == 0:
-        raise ValueError("CSV invalide: aucune colonne 'D_ell_patch{i}' trouvée.")
+        raise ValueError("Invalid CSV: no 'D_ell_patch{i}' column found.")
     D_stack = df[patch_cols].to_numpy(dtype=float).T  # (N, d)
     ell = df["ell"].to_numpy(dtype=float)
     d = ell.shape[0]
@@ -248,9 +248,9 @@ def _load_emp_ps_from_csv(csv_path: str, *, quiet: bool = False) -> Dict[str, An
     else:
         D_std = D_stack.std(axis=0, ddof=1) if N > 1 else np.zeros(d, dtype=np.float64)
     if ell.shape[0] != D_stack.shape[1]:
-        raise ValueError("Incohérence: len(ell) != nb de bins dans D_ell_stack.")
+        raise ValueError("Inconsistency: len(ell) != number of bins in D_ell_stack.")
     if not quiet:
-        print(f"[info] CSV D_ell chargé: {os.path.basename(csv_path)} • d={d}, N={N}")
+        print(f"[info] D_ell CSV loaded: {os.path.basename(csv_path)} • d={d}, N={N}")
     return {"ell": ell, "D_ell_mean": D_mean, "D_ell_std": D_std, "D_ell_stack": D_stack, "n_maps": int(N)}
 
 def _load_dell_block(paths: Sequence[str], *, cut_head: int = 1, cut_tail: int = 1) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -267,7 +267,7 @@ def _load_dell_block(paths: Sequence[str], *, cut_head: int = 1, cut_tail: int =
         D = np.asarray(d["D_ell_stack"], dtype=np.float64)  # [N, d]
         h = int(max(0, cut_head)); t = int(max(0, cut_tail))
         if h + t >= D.shape[1]:
-            raise ValueError(f"Coupe (head={h}, tail={t}) trop agressive pour d={D.shape[1]} dans {os.path.basename(f)}")
+            raise ValueError(f"Cut (head={h}, tail={t}) too aggressive for d={D.shape[1]} in {os.path.basename(f)}")
         if t > 0:
             D = D[:, h:-t]
             ell = d["ell"][h:-t]
@@ -280,7 +280,7 @@ def _load_dell_block(paths: Sequence[str], *, cut_head: int = 1, cut_tail: int =
         return np.empty((0, 0), dtype=np.float64), meta
     pset = {m.shape[1] for m in mats}
     if len(pset) != 1:
-        raise ValueError(f"D_ell: dimensions de features incohérentes après coupe: {sorted(pset)}")
+        raise ValueError(f"D_ell: inconsistent feature dimensions after cut: {sorted(pset)}")
     return np.concatenate(mats, axis=0), meta
 
 # ======================================
@@ -297,7 +297,7 @@ def _align_blocks(blocks: Sequence[np.ndarray], *, mode: str = "truncate") -> np
     Ns = [b.shape[0] for b in valid]
     if len(set(Ns)) != 1:
         if mode == "strict":
-            raise ValueError(f"N d'échantillons incompatibles: {Ns}")
+            raise ValueError(f"Incompatible sample N: {Ns}")
         Nmin = min(Ns)
         valid = [b[:Nmin] for b in valid]
     return np.concatenate(valid, axis=1)
@@ -359,7 +359,7 @@ def compute_covariance_mixed(
         if mats:
             p_set = {m.shape[1] for m in mats}
             if len(p_set) != 1:
-                raise ValueError(f"WST: dimensions de features incohérentes: {sorted(p_set)}")
+                raise ValueError(f"WST: inconsistent feature dimensions: {sorted(p_set)}")
             W = np.concatenate(mats, axis=0)
 
     # -- Load D_ell --
@@ -371,10 +371,10 @@ def compute_covariance_mixed(
     # -- Merge / alignment --
     X = _align_blocks([W, D], mode=align)
     if X.size == 0:
-        raise ValueError("Aucun échantillon/observable lisible: WST et D_ell vides.")
+        raise ValueError("No readable sample/observable: WST and D_ell are empty.")
     N, p = X.shape
     if N < 2 or p < 1:
-        raise ValueError(f"Samples insuffisants pour une covariance: N={N}, p={p} (besoin N>=2 et p>=1).")
+        raise ValueError(f"Insufficient samples for covariance: N={N}, p={p} (need N>=2 and p>=1).")
 
     # -- Covariance (sample estimator ddof=1) --
     cov = np.cov(X, rowvar=False, ddof=1)

@@ -4,18 +4,18 @@ import pandas as pd
 import math
 import logging
 from typing import Optional, Tuple, Dict, Any, Literal
-import scattering  # déjà importé dans ton code
-setattr(scattering, "np", np)  # hotfix: fournit 'np' au module
+import scattering  # already imported in your code
+setattr(scattering, "np", np)  # hotfix: provide 'np' to the module
 
 
-# essaye d'importer les fonctions du dépôt ; si elles existent on les utilisera
+# try to import functions from the repository; use them if they exist
 try:
-    import ST  # utilitaire du dépôt (get_random_data, power spectrum helpers)
+    import ST  # repository utility (get_random_data, power spectrum helpers)
 except Exception:
     ST = None
 
 try:
-    import scattering  # package scattering du dépôt (synthesis, ...)
+    import scattering  # scattering package from repository (synthesis, ...)
 except Exception:
     scattering = None
 
@@ -29,42 +29,42 @@ logging.basicConfig(level=logging.INFO)
 
 def read_params_csv(csv_path: str) -> pd.DataFrame:
     """
-    Lit un tableau de paramètres cosmologiques depuis:
-      - un CSV (encodages usuels essayés), ou
-      - un fichier NumPy (.npy/.npz) contenant un array structuré ou un dict.
+    Read a table of cosmological parameters from:
+      - a CSV (common encodings are tried), or
+      - a NumPy file (.npy/.npz) containing a structured array or dict.
     """
     import os
     ext = os.path.splitext(csv_path)[1].lower()
 
     if ext in (".npy", ".npz"):
         arr = np.load(csv_path, allow_pickle=True)
-        # .npz -> mapping clé->array
+        # .npz -> key->array mapping
         if hasattr(arr, "files"):
-            # heuristique: s'il y a une clé unique avec tableau de records
+            # heuristic: if there is a unique key with record array
             if len(arr.files) == 1 and arr[arr.files[0]].dtype.names:
                 rec = arr[arr.files[0]]
                 return pd.DataFrame.from_records(rec)
-            # sinon, on tente d’empiler en colonnes
+            # otherwise, try to stack as columns
             data = {k: arr[k] for k in arr.files}
             return pd.DataFrame(data)
         else:
             # .npy
-            if arr.dtype.names:  # array structuré
+            if arr.dtype.names:  # structured array
                 return pd.DataFrame.from_records(arr)
             elif isinstance(arr, np.ndarray):
-                # si c’est un array 2D, on fabrique des colonnes génériques
+                # if it's a 2D array, create generic columns
                 if arr.ndim == 2:
                     cols = [f"col{i}" for i in range(arr.shape[1])]
                     return pd.DataFrame(arr, columns=cols)
-                # si c’est un array d’objets/dicts
+                # if it's an array of objects/dicts
                 if arr.dtype == object:
                     try:
                         return pd.DataFrame(list(arr))
                     except Exception:
                         pass
-            raise ValueError("Format .npy/.npz non reconnu pour construire un DataFrame.")
+            raise ValueError(".npy/.npz format not recognized for DataFrame construction.")
     else:
-        # CSV: on essaie plusieurs encodages courants
+        # CSV: try several common encodings
         encodings = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
         last_err = None
         for enc in encodings:
@@ -77,36 +77,36 @@ def read_params_csv(csv_path: str) -> pd.DataFrame:
 
 def _read_csv_detect_type(csv_path: str) -> Tuple[str, pd.DataFrame]:
     """
-    Lit le CSV en ignorant les lignes commentées (#) et détecte s'il s'agit
-    d'un fichier 'wst' (coefs scattering) ou d'un 'spectrum' (ell, D_ell, ...).
+    Read CSV ignoring commented lines (#) and detect whether it is a
+    'wst' file (scattering coefficients) or a 'spectrum' file (ell, D_ell, ...).
 
-    Retour: (type_str, dataframe) où type_str ∈ {'wst','spectrum'}.
+    Returns: (type_str, dataframe) where type_str ∈ {'wst','spectrum'}.
     """
-    # On laisse pandas détecter le séparateur, garde header si présent.
+    # Let pandas detect the separator, keep header if present.
     df = pd.read_csv(csv_path, comment='#', engine='python')
 
-    # Normalise les noms de colonnes (strip)
+    # Normalize column names (strip)
     df.columns = [str(c).strip() for c in df.columns]
     cols = list(df.columns)
 
-    # Heuristique 'spectrum' : colonne 'ell' OU colonne contenant 'D_ell'/'Cl'/'power'
+    # 'spectrum' heuristic: 'ell' column OR column containing 'D_ell'/'Cl'/'power'
     low = [c.lower() for c in cols]
     if any(c == 'ell' for c in low):
         return 'spectrum', df
     if any(('d_ell' in c or 'dell' in c or 'power' in c or c == 'cl') for c in low):
         return 'spectrum', df
 
-    # Heuristique 'wst' : présence d'une colonne (ou valeurs) de type 'S0','S1','S2', ...
-    # Cas typique fourni: colonnes [sample, kind, index, value]
+    # 'wst' heuristic: presence of a column (or values) of type 'S0','S1','S2', ...
+    # Typical case provided: columns [sample, kind, index, value]
     if 'kind' in low:
         if df['kind' if 'kind' in cols else cols[low.index('kind')]].astype(str).str.match(r'^\s*S\d+').any():
             return 'wst', df
-    # Sinon, chercher n'importe quelle colonne où les valeurs ressemblent à 'S\d'
+    # Otherwise, search any column where values resemble 'S\d'
     for c in cols:
         if df[c].astype(str).str.match(r'^\s*S\d+').any():
             return 'wst', df
 
-    # Fallback: si première colonne est numérique et au moins deux colonnes -> spectrum
+    # Fallback: if first column is numeric and at least two columns -> spectrum
     if df.shape[1] >= 2:
         try:
             _ = pd.to_numeric(df.iloc[:, 0])
@@ -114,25 +114,25 @@ def _read_csv_detect_type(csv_path: str) -> Tuple[str, pd.DataFrame]:
         except Exception:
             pass
 
-    raise ValueError("Impossible de détecter le format du CSV : vérifie les en-têtes ou le contenu.")
+    raise ValueError("Cannot detect CSV format: check headers or content.")
 
 
 def _parse_spectrum_df(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Extrait le couple (ells, power) depuis un dataframe de type 'spectrum'.
-    On cherche 'ell' (ou 1ère colonne) et 'D_ell_mean' / 'power' / 'Cl' (ou 2e colonne).
+    Extract the (ells, power) pair from a 'spectrum' type dataframe.
+    Look for 'ell' (or 1st column) and 'D_ell_mean' / 'power' / 'Cl' (or 2nd column).
     """
     cols = list(df.columns)
     low = [c.lower() for c in cols]
 
-    # colonne ell
+    # ell column
     ell_col = None
     if 'ell' in low:
         ell_col = cols[low.index('ell')]
     else:
         ell_col = cols[0]
 
-    # colonne power
+    # power column
     power_candidates = []
     for c in cols[1:]:
         lc = c.lower()
@@ -140,13 +140,13 @@ def _parse_spectrum_df(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
             power_candidates.append(c)
     power_col = power_candidates[0] if power_candidates else (cols[1] if len(cols) >= 2 else None)
     if power_col is None:
-        raise ValueError("Impossible de trouver une colonne de puissance dans le CSV.")
+        raise ValueError("Cannot find a power column in the CSV.")
 
     ells = pd.to_numeric(df[ell_col], errors='coerce').to_numpy(dtype=float)
     power = pd.to_numeric(df[power_col], errors='coerce').to_numpy(dtype=float)
 
     if np.any(~np.isfinite(ells)) or np.any(~np.isfinite(power)):
-        raise ValueError("Colonnes ell/power contiennent des valeurs non finies.")
+        raise ValueError("ell/power columns contain non-finite values.")
 
     return ells, power
 
@@ -158,18 +158,18 @@ def _parse_wst_df(
     kinds: Optional[Tuple[str, ...]] = ("S0","S1"),
 ) -> np.ndarray:
     """
-    Transforme un CSV WST de forme type [sample, kind, index, value] en vecteur 1D.
-    - sample: index d'échantillon à sélectionner (par défaut 0). Si None et aggregate='mean', on moyenne sur tous les samples.
-    - aggregate: 'none' (sélection d'un sample) ou 'mean' (moyenne sur la dimension sample).
-    - kinds: tuple des 'kinds' à garder et leur ordre (par défaut ('S0','S1')).
+    Transform a WST CSV of form [sample, kind, index, value] into a 1D vector.
+    - sample: sample index to select (default 0). If None and aggregate='mean', average over all samples.
+    - aggregate: 'none' (select one sample) or 'mean' (average over sample dimension).
+    - kinds: tuple of 'kinds' to keep and their order (default ('S0','S1')).
 
-    Retourne un vecteur numpy 1D trié [S0(idx=0), S1(idx=0..), ...] pour un sample ou la moyenne.
+    Returns a sorted 1D numpy vector [S0(idx=0), S1(idx=0..), ...] for one sample or the average.
     """
-    # colonnes attendues (avec tolérance aux noms)
+    # expected columns (with name tolerance)
     cols = list(df.columns)
     low = [c.lower() for c in cols]
 
-    # repère colonnes
+    # locate columns
     def _find(colname, default=None):
         return cols[low.index(colname)] if colname in low else default
 
@@ -177,7 +177,7 @@ def _parse_wst_df(
     col_kind   = _find('kind', None)
     col_index  = _find('index', None)
 
-    # colonne valeur: dernière colonne numérique par défaut
+    # value column: last numeric column by default
     value_col = None
     for c in reversed(cols):
         if pd.api.types.is_numeric_dtype(df[c]):
@@ -185,9 +185,9 @@ def _parse_wst_df(
             break
     value_col = value_col or cols[-1]
 
-    # Filtre des kinds voulus
+    # Filter desired kinds
     if col_kind is None:
-        raise ValueError("CSV WST: colonne 'kind' absente.")
+        raise ValueError("WST CSV: 'kind' column missing.")
 
     work = df.copy()
     work[col_kind] = work[col_kind].astype(str).str.strip()
@@ -195,13 +195,13 @@ def _parse_wst_df(
     if kinds is not None:
         work = work[work[col_kind].isin(kinds)]
         if work.empty:
-            raise ValueError(f"CSV WST: aucun des kinds {kinds} n'a été trouvé.")
+            raise ValueError(f"WST CSV: none of the kinds {kinds} were found.")
 
-    # Gestion du sample / moyenne
+    # Handle sample / average
     if aggregate == 'mean':
-        # moyenne par (kind, index)
+        # average by (kind, index)
         if col_index is None:
-            # S0 only (index manquant) → ajoute index 0
+            # S0 only (index missing) → add index 0
             work['_idx'] = 0
             g = work.groupby([col_kind, '_idx'])[value_col].mean().reset_index()
             g = g.rename(columns={'_idx':'index'})
@@ -209,29 +209,29 @@ def _parse_wst_df(
             g = work.groupby([col_kind, col_index])[value_col].mean().reset_index()
             g = g.rename(columns={col_index:'index'})
     else:
-        # sélection d'un sample précis (défaut: 0)
+        # select a specific sample (default: 0)
         if col_sample is None:
-            # pas de colonne sample → on considère l'ensemble comme un seul sample
+            # no sample column → consider the whole as a single sample
             sub = work
         else:
             s = 0 if sample is None else int(sample)
             sub = work[work[col_sample] == s]
             if sub.empty:
-                raise ValueError(f"CSV WST: sample={s} introuvable.")
+                raise ValueError(f"WST CSV: sample={s} not found.")
         if col_index is None:
             sub = sub.assign(index=0)
         else:
             sub = sub.rename(columns={col_index:'index'})
         g = sub[[col_kind, 'index', value_col]].copy()
 
-    # Ordonne: par ordre des kinds demandé puis par index croissant
+    # Sort: by requested kinds order then by increasing index
     order_kind = list(kinds) if kinds is not None else sorted(g[col_kind].unique())
     g['_korder'] = g[col_kind].apply(lambda x: order_kind.index(x) if x in order_kind else len(order_kind))
     g = g.sort_values(['_korder','index']).reset_index(drop=True)
 
     vec = pd.to_numeric(g[value_col], errors='coerce').to_numpy(dtype=np.float32)
     if np.any(~np.isfinite(vec)):
-        raise ValueError("CSV WST: des valeurs non finies ont été trouvées dans la colonne des coefficients.")
+        raise ValueError("WST CSV: non-finite values found in the coefficients column.")
 
     return vec
 
@@ -244,10 +244,10 @@ def _build_fourier_amplitude_from_spectrum(
     ells: np.ndarray, power: np.ndarray, M: int, N: int, pixel_scale_arcmin: float
 ) -> np.ndarray:
     """
-    Construit une grille d'amplitudes (M,N) en espace de Fourier à partir d'un vecteur (ell, power).
-    - power: supposé ≥ 0; si D_ell, convertir en amont si nécessaire.
-    - pixel_scale_arcmin : taille de pixel en arcmin → rad.
-    amplitude = sqrt( power_interpolée(ell_grid) ).
+    Build an (M,N) amplitude grid in Fourier space from a (ell, power) vector.
+    - power: assumed ≥ 0; if D_ell, convert beforehand if necessary.
+    - pixel_scale_arcmin: pixel size in arcmin → rad.
+    amplitude = sqrt( interpolated_power(ell_grid) ).
     """
     pix_rad = pixel_scale_arcmin / 60.0 * (math.pi / 180.0)  # rad/pixel
 
@@ -256,7 +256,7 @@ def _build_fourier_amplitude_from_spectrum(
     KX, KY = np.meshgrid(kx, ky, indexing='ij')
     ell_grid = 2.0 * math.pi * np.sqrt(KX ** 2 + KY ** 2)
 
-    # Interpolation 1D (linéaire) sur ell, maintien des bords
+    # 1D (linear) interpolation on ell, maintain borders
     sort_idx = np.argsort(ells)
     ells_s = np.maximum(ells[sort_idx], 0.0)
     power_s = np.maximum(power[sort_idx], 0.0)
@@ -270,7 +270,7 @@ def _build_fourier_amplitude_from_spectrum(
 
 def _hermitian_symmetric_complex_field(amplitude: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
     """
-    Génère un champ complexe F (M,N) hermitien: F[-i,-j] = conj(F[i,j]) à partir d'une amplitude (M,N).
+    Generate a Hermitian complex field F (M,N): F[-i,-j] = conj(F[i,j]) from an amplitude (M,N).
     """
     M, N = amplitude.shape
     F = np.zeros((M, N), dtype=np.complex128)
@@ -287,7 +287,7 @@ def _hermitian_symmetric_complex_field(amplitude: np.ndarray, rng: np.random.Ran
             if amp < 0:
                 amp = 0.0
             if (si == i) and (sj == j):
-                # points auto-conjugués (DC/Nyquist) -> réel non négatif
+                # self-conjugate points (DC/Nyquist) -> non-negative real
                 F[i, j] = amp
             else:
                 phi = rng.uniform(0.0, 2.0 * math.pi)
@@ -312,20 +312,20 @@ def generate_patch_from_csv(
     synthesis_kwargs: Optional[Dict[str, Any]] = None,
 ) -> np.ndarray:
     """
-    Génère un patch 2D à partir d'un CSV contenant soit un spectre (ell, D_ell_mean, ...)
-    soit des coefficients WST (moments S0/S1, etc.).
+    Generate a 2D patch from a CSV containing either a spectrum (ell, D_ell_mean, ...)
+    or WST coefficients (moments S0/S1, etc.).
 
     Args:
-      - method: 'wst'/'Dell' pour scattering, ou 'spectrum' pour un champ gaussien à partir d'un spectre.
-      - patch_size: (M, N) taille du patch de sortie.
-      - pixel_scale_arcmin: taille de pixel en arcminutes.
-      - csv_path: chemin vers le CSV.
-      - output_path: si fourni, enregistre le patch .npy à ce chemin.
-      - seed: graine RNG.
-      - device: 'cpu' ou 'gpu'.
-      - synthesis_kwargs: kwargs passés à scattering.synthesis (J, L, steps, learning_rate, estimator_name, ...).
+      - method: 'wst'/'Dell' for scattering, or 'spectrum' for a Gaussian field from a spectrum.
+      - patch_size: (M, N) output patch size.
+      - pixel_scale_arcmin: pixel size in arcminutes.
+      - csv_path: path to the CSV.
+      - output_path: if provided, save the .npy patch to this path.
+      - seed: RNG seed.
+      - device: 'cpu' or 'gpu'.
+      - synthesis_kwargs: kwargs passed to scattering.synthesis (J, L, steps, learning_rate, estimator_name, ...).
 
-    Retour: patch numpy float32 de shape (M, N).
+    Returns: numpy float32 patch of shape (M, N).
     """
     rng = np.random.RandomState(seed if seed is not None else np.random.randint(0, 2 ** 31 - 1))
     method_norm = (method or '').strip().lower()
@@ -338,12 +338,12 @@ def generate_patch_from_csv(
 
     # ---------------- Spectrum path ----------------
     if method_norm in ('spectrum', 'power', 'wst_spectrum') or (kind == 'spectrum' and method_norm != 'wst'):
-        logger.info("Génération par spectre de puissance (mode 'spectrum').")
+        logger.info("Generation by power spectrum (mode 'spectrum').")
         ells, power = _parse_spectrum_df(df)
         amplitude = _build_fourier_amplitude_from_spectrum(ells, power, M, N, pixel_scale_arcmin)
         F = _hermitian_symmetric_complex_field(amplitude, rng)
         field = np.fft.ifft2(F).real.astype(np.float32)
-        # normalisation optionnelle: centrage et variance unité
+        # optional normalization: center and unit variance
         field -= field.mean()
         std = float(field.std())
         if std > 0:
@@ -355,57 +355,57 @@ def generate_patch_from_csv(
     # ---------------- WST path ----------------
     if method_norm == 'wst' or (kind == 'wst' and method_norm == 'wst'):
         if scattering is None:
-            raise ImportError("Module 'scattering' introuvable : ajoute le package du dépôt au PYTHONPATH ou installe-le (pip install -e).")
-        logger.info("Génération par Wavelet Scattering Transform (synthesis).")
+            raise ImportError("'scattering' module not found: add the repository package to PYTHONPATH or install it (pip install -e).")
+        logger.info("Generation by Wavelet Scattering Transform (synthesis).")
 
-        # --- Sélection d'un sample ou moyenne sur les 10 (évite le piège 80 vs 8) ---
-        sample_id = synthesis_kwargs.pop('sample', 0)      # int ou None
+        # --- Select a sample or average over 10 (avoid the 80 vs 8 trap) ---
+        sample_id = synthesis_kwargs.pop('sample', 0)      # int or None
         aggregate = synthesis_kwargs.pop('aggregate', 'none')  # 'none' | 'mean'
-        kinds = synthesis_kwargs.pop('kinds', ("S0","S1"))   # garder S0/S1 par défaut
+        kinds = synthesis_kwargs.pop('kinds', ("S0","S1"))   # keep S0/S1 by default
 
         coef_vec = _parse_wst_df(df, sample=sample_id, aggregate=aggregate, kinds=kinds)
 
-                # --- Ajustement selon le type d’estimateur ---
+                # --- Adjustment according to estimator type ---
         J = synthesis_kwargs.get("J", 7)
         L = synthesis_kwargs.get("L", 4)
         estimator = synthesis_kwargs.get("estimator_name", "wst")
 
-        # Si on est en mode isotrope (wst_iso), on s’attend à un vecteur de longueur J
+        # If in isotropic mode (wst_iso), we expect a vector of length J
         if estimator == "wst_iso":
             if coef_vec.size != J:
-                raise ValueError(f"wst_iso attend J={J} valeurs S0; trouvé {coef_vec.size}.")
-            coef_vec = np.concatenate([[0.0], coef_vec])  # → taille 1+J
+                raise ValueError(f"wst_iso expects J={J} S0 values; found {coef_vec.size}.")
+            coef_vec = np.concatenate([[0.0], coef_vec])  # → size 1+J
 
-        # Si on est en mode wst complet (non isotrope), on s’attend à J*L valeurs
+        # If in full wst mode (non-isotropic), we expect J*L values
         elif estimator == "wst":
             expected = J * L
             if coef_vec.size != expected:
-                raise ValueError(f"wst attend J*L={expected} valeurs S1(j,l); trouvé {coef_vec.size}.")
-            coef_vec = np.concatenate([[0.0], coef_vec])  # → taille 1+J*L
+                raise ValueError(f"wst expects J*L={expected} S1(j,l) values; found {coef_vec.size}.")
+            coef_vec = np.concatenate([[0.0], coef_vec])  # → size 1+J*L
 
-        # --- Prépare la cible & arguments de synthèse ---
+        # --- Prepare target & synthesis arguments ---
         import torch
         target_t = torch.as_tensor(coef_vec, dtype=torch.float32).view(1, -1)  # (1, K)
 
-        # Nom d'estimateur par défaut pour S0/S1 (adapter selon la lib si besoin)
+        # Default estimator name for S0/S1 (adapt according to lib if needed)
         estimator_name = synthesis_kwargs.pop('estimator_name', 'moments')
 
         synth_args = dict(
             estimator_name=estimator_name,
             target=target_t,
-            mode='estimator',     # on fournit directement le vecteur cible
+            mode='estimator',     # directly provide the target vector
             M=M, N=N,
             device=device,
         )
-        # Merge kwargs utilisateur (J, L, steps, learning_rate, etc.)
+        # Merge user kwargs (J, L, steps, learning_rate, etc.)
         synth_args.update(synthesis_kwargs)
 
-        logger.info(f"Appel de scattering.synthesis avec args: {list(synth_args.keys())}")
+        logger.info(f"Calling scattering.synthesis with args: {list(synth_args.keys())}")
 
-        # --- Appel synthèse ---
+        # --- Synthesis call ---
         image_syn = scattering.synthesis(**synth_args)
 
-        # --- Conversion numpy ---
+        # --- Numpy conversion ---
         if isinstance(image_syn, (list, tuple)):
             image_syn = image_syn[0]
         if hasattr(image_syn, 'detach'):
@@ -413,7 +413,7 @@ def generate_patch_from_csv(
         if hasattr(image_syn, 'cpu'):
             image_syn = image_syn.cpu().numpy()
 
-        # Attendu: (1,M,N) ou (M,N)
+        # Expected: (1,M,N) or (M,N)
         if image_syn.ndim == 3 and image_syn.shape[0] == 1:
             patch = image_syn[0].astype(np.float32)
         elif image_syn.ndim == 2:
@@ -421,7 +421,7 @@ def generate_patch_from_csv(
         else:
             patch = np.squeeze(image_syn).astype(np.float32)
 
-        # Normalisation simple
+        # Simple normalization
         patch -= patch.mean()
         std = float(patch.std())
         if std > 0:
@@ -432,13 +432,13 @@ def generate_patch_from_csv(
         return patch
 
     # -------------------------------------------------
-    raise ValueError(f"method '{method}' non supportée ou CSV type='{kind}' non compatible.")
+    raise ValueError(f"method '{method}' not supported or CSV type='{kind}' incompatible.")
 
 
-# petit helper d'exemple pour notebook
+# small example helper for notebooks
 def example_notebook_usage():
     """
-    Exemple rapide (à adapter) pour un notebook :
+    Quick example (to adapt) for a notebook:
     >>> from generators import generate_patch_from_csv
     >>> patch = generate_patch_from_csv(
     ...   'wst', patch_size=(256,256), pixel_scale_arcmin=0.5,

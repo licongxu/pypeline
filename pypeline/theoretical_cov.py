@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- Parsing via extract_params  ---
-from title_reader import extract_params 
+from title_reader import extract_params
 
-# --- Valeurs de base par défaut  ---
+# --- Default base values  ---
 DEFAULT_ALLPARS: Dict[str, float | int] = {
     'omega_b': 0.02242,
     'omega_cdm': 0.1193,
@@ -29,7 +29,7 @@ DEFAULT_ALLPARS: Dict[str, float | int] = {
     'jax': 1,
 }
 
-# Mapping CSV/params -> clés tszpower
+# Mapping CSV/params -> tszpower keys
 _KEY_MAP = {
     'Ob0h2': 'omega_b',
     'Oc0h2': 'omega_cdm',
@@ -39,7 +39,7 @@ _KEY_MAP = {
 }
 
 def _parse_params_from_csv(csv_path: str) -> Dict[str, float]:
-    """Lit la première ligne d'un CSV et renvoie un dict de paramètres."""
+    """Read the first row of a CSV and return a dict of parameters."""
     with open(csv_path, newline='') as f:
         reader = csv.DictReader(f)
         row = next(reader)
@@ -58,22 +58,22 @@ def _build_allpars_from_params(
     base: Optional[Dict[str, float | int]] = None,
     include_extras: bool = True
 ) -> Dict[str, float | int]:
-    """Construit allpars directement depuis un dict de paramètres (depuis CSV ou titre)."""
+    """Build allpars directly from a dict of parameters (from CSV or title)."""
     allpars = deepcopy(DEFAULT_ALLPARS if base is None else base)
 
-    # h -> H0 et rescale des masses
+    # h -> H0 and rescale masses
     h = params.get('h', None)
     if h is not None:
         try:
             h = float(h)
             allpars['H0'] = 100.0 * h
-            # on force les masses cohérentes avec h
+            # force masses consistent with h
             allpars['M_min'] = 1.0e14 * h
             allpars['M_max'] = 1.0e16 * h
         except (TypeError, ValueError):
             pass
 
-    # mapping direct des clés vers ce qu'attend tszpower
+    # direct mapping of keys to what tszpower expects
     for src_key, dst_key in _KEY_MAP.items():
         if src_key in params:
             try:
@@ -81,7 +81,7 @@ def _build_allpars_from_params(
             except (TypeError, ValueError):
                 pass
 
-    # extras éventuels
+    # possible extras
     if include_extras:
         for extra in ('A_cib', 'A_ir', 'A_rs'):
             if extra in params:
@@ -93,14 +93,14 @@ def _build_allpars_from_params(
 
 def _normalise_params_from_source(source: str) -> Dict[str, float]:
     """
-    Renvoie un dict plat de paramètres à partir d'un CSV ou d'un *titre* parsé par extract_params.
-    Gère le cas où extract_params renvoie {fichier: {...}}.
+    Return a flat dict of parameters from a CSV or a *title* parsed by extract_params.
+    Handle the case where extract_params returns {file: {...}}.
     """
     if os.path.isfile(source) and source.lower().endswith(".csv"):
         params = _parse_params_from_csv(source)
     else:
         params = extract_params(source)
-        # PATCH: si extract_params renvoie {path: {...}} on choisit l'entrée ad hoc
+        # PATCH: if extract_params returns {path: {...}} choose the appropriate entry
         if isinstance(params, dict) and params:
             first_val = next(iter(params.values()))
             if isinstance(first_val, dict):
@@ -108,7 +108,7 @@ def _normalise_params_from_source(source: str) -> Dict[str, float]:
                     params = params[source]
                 else:
                     params = first_val
-    # Nettoyage des clés (BOM, espaces)
+    # Clean keys (BOM, spaces)
     params = {str(k).strip().lstrip('\ufeff'): v for k, v in params.items()}
     return params
 
@@ -124,47 +124,47 @@ def compute_theoretical_covariance_from_source(
     f_sky: float = None
 ) -> Tuple[np.ndarray, Optional[plt.Figure]]:
     """
-    Calcule la covariance théorique (trispectrum) à partir d'un *titre* (via extract_params) ou d'un *CSV*.
+    Compute theoretical covariance (trispectrum) from a *title* (via extract_params) or a *CSV*.
 
-    Paramètres
+    Parameters
     ----------
     source : str
-        - Titre/nom parsable (ex: "logA=..._Oc0h2=..._h=...") -> utilise extract_params
-        - OU chemin d'un fichier CSV avec colonnes:
+        - Parsable title/name (e.g.: "logA=..._Oc0h2=..._h=...") -> uses extract_params
+        - OR path to a CSV file with columns:
           h,n_s,Ob0h2,B,A_cib,A_ir,A_rs,logA,Oc0h2
     initialise_tsz : bool
-        Si True, fait tsz.classy_sz.set(allpars) puis tsz.initialise().
+        If True, does tsz.classy_sz.set(allpars) then tsz.initialise().
     use_scaled : bool
-        Si True, utilise compute_scaled_trispectrum, sinon compute_trispectrum.
+        If True, uses compute_scaled_trispectrum, otherwise compute_trispectrum.
     tsz_module : module
-        Injection optionnelle du module tszpower (utile pour tests).
+        Optional injection of the tszpower module (useful for tests).
     show : bool
-        Affiche la figure si True.
+        Display the figure if True.
     return_fig : bool
-        Retourne la Figure si True.
+        Return the Figure if True.
     imshow_kwargs : dict
-        Arguments passés à imshow (ex. {'origin': 'lower'}).
+        Arguments passed to imshow (e.g. {'origin': 'lower'}).
 
-    Retour
-    ------
+    Returns
+    -------
     (cov, fig)
       cov : np.ndarray
-      fig : matplotlib.figure.Figure ou None
+      fig : matplotlib.figure.Figure or None
     """
-    # 0) Import tszpower ici pour permettre l'injection tsz_module
+    # 0) Import tszpower here to allow tsz_module injection
     tsz = tsz_module
     if tsz is None:
         import tszpower as tsz
 
-    # 1) Récupère un dict plat de paramètres puis construit allpars
+    # 1) Get a flat dict of parameters then build allpars
     params = _normalise_params_from_source(source)
     allpars = _build_allpars_from_params(params)
 
-    # 2) Initialisation (set + initialise)
+    # 2) Initialization (set + initialise)
     if initialise_tsz:
         tsz.classy_sz.set(allpars)
         tsz.initialise()
-        # Optionnel : essaye de calculer sigma8 (suivant dispo)
+        # Optional: try to compute sigma8 (depending on availability)
         try:
             tsz.classy_sz.get_sigma8_and_der(params_values_dict=allpars)
         except Exception:
@@ -173,7 +173,7 @@ def compute_theoretical_covariance_from_source(
             except Exception:
                 pass
 
-    # 3) Calcul de la covariance via trispectrum
+    # 3) Covariance computation via trispectrum
     def _call_with_fallback(fn_scaled: bool):
         if fn_scaled:
             try:
@@ -216,7 +216,7 @@ def compute_theoretical_covariance_from_source(
     return (cov, fig) if return_fig else (cov, None)
 
 
-# --- Compat: ancien nom (si tu veux garder la même API qu'avant) ---
+# --- Compat: old name (if you want to keep the same API as before) ---
 def compute_theoretical_covariance_from_title(*args, **kwargs):
-    """Wrapper rétrocompatible qui appelle la nouvelle fonction."""
+    """Backward compatible wrapper that calls the new function."""
     return compute_theoretical_covariance_from_source(*args, **kwargs)
