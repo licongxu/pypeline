@@ -5,7 +5,7 @@ import csv
 import matplotlib.pyplot as plt
 
 import tszpower as tsz
-from title_reader import extract_params  # must know how to parse the "title"
+# from title_reader import extract_params  # must know how to parse the "title"
 
 import numpy as np
 print("tszpower from:", tsz.__file__)

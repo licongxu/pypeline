@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- Parsing via extract_params  ---
-from title_reader import extract_params
+# from title_reader import extract_params
 
 # --- Default base values  ---
 DEFAULT_ALLPARS: Dict[str, float | int] = {

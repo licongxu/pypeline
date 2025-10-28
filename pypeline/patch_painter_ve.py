@@ -1,9 +1,9 @@
 # tsz_painter_fixed_grouped.py
 from __future__ import annotations
+from juliacall import Main as jl
 import os
 import re  # (ADD) for parsing parameters from filenames
 from typing import Sequence, Optional, Union, List
-from juliacall import Main as jl
 from pathlib import Path
 import json
 import pandas as pd
